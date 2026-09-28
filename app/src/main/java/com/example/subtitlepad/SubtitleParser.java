@@ -51,6 +51,8 @@ public final class SubtitleParser {
                     .replace("&amp;", "&")
                     .replace("&lt;", "<")
                     .replace("&gt;", ">")
+                    .replace("&quot;", "\"")
+                    .replace("&#39;", "'")
                     .trim();
             if (!body.isEmpty()) {
                 starts.add(start);

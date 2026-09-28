@@ -139,8 +139,8 @@ public class MainActivity extends Activity {
     private void pickSubtitle() {
         Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         i.addCategory(Intent.CATEGORY_OPENABLE);
+        // Do not restrict MIME type: Android file providers often report .smi with vendor-specific MIME types.
         i.setType("*/*");
-        i.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"text/plain", "application/octet-stream"});
         startActivityForResult(i, PICK_SUBTITLE);
     }
 
@@ -162,9 +162,20 @@ public class MainActivity extends Activity {
             String name = getFileName(uri);
             String ext = "";
             int dot = name.lastIndexOf('.');
-            if (dot >= 0) ext = name.substring(dot + 1);
+            if (dot >= 0) ext = name.substring(dot + 1).toLowerCase(Locale.US);
+            if (!ext.equals("smi") && !ext.equals("srt")) {
+                Toast.makeText(this, "SMI 또는 SRT 파일을 선택하세요.\n선택된 파일: " + name, Toast.LENGTH_LONG).show();
+                return;
+            }
+            List<Subtitle> parsed = SubtitleParser.parse(raw, ext);
+            if (parsed.isEmpty()) {
+                Toast.makeText(this, "자막을 찾지 못했습니다. 파일 형식이나 인코딩을 확인하세요.\n파일: " + name, Toast.LENGTH_LONG).show();
+                fileView.setText(name + "  ·  자막 0개");
+                subtitleView.setText("");
+                return;
+            }
             subtitles.clear();
-            subtitles.addAll(SubtitleParser.parse(raw, ext));
+            subtitles.addAll(parsed);
             positionMs = 0;
             syncMs = 0;
             playing = false;
