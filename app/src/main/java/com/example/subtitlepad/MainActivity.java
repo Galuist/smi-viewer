@@ -34,6 +34,8 @@ public class MainActivity extends Activity {
     private long lastTick;
     private float touchDownY;
     private final Handler handler = new Handler(Looper.getMainLooper());
+    private boolean systemBarsHidden = false;
+    private int baseLeft = 14, baseTop = 8, baseRight = 14, baseBottom = 6;
 
     private final Runnable ticker = new Runnable() {
         @Override public void run() {
@@ -49,8 +51,10 @@ public class MainActivity extends Activity {
 
     private final Runnable hideControlsRunnable = new Runnable() {
         @Override public void run() {
-            if (playing && controlPanel != null) {
-                controlPanel.setVisibility(View.GONE);
+            if (playing) {
+                if (controlPanel != null) controlPanel.setVisibility(View.GONE);
+                if (fileView != null) fileView.setVisibility(View.GONE);
+                setSystemBarsHidden(true);
             }
         }
     };
@@ -58,9 +62,6 @@ public class MainActivity extends Activity {
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
-                WindowManager.LayoutParams.FLAG_FULLSCREEN);
-
         if (savedInstanceState != null) {
             positionMs = savedInstanceState.getLong("positionMs", 0);
             syncMs = savedInstanceState.getLong("syncMs", 0);
@@ -72,6 +73,8 @@ public class MainActivity extends Activity {
         }
 
         buildUi();
+        setupSystemBarInsets();
+        showControls();
         lastTick = SystemClock.elapsedRealtime();
         handler.post(ticker);
 
@@ -91,6 +94,7 @@ public class MainActivity extends Activity {
         // Keep the same Activity instance so subtitle position, sync and settings survive rotation.
         subtitleView.setTextSize(textSizeSp);
         subtitleView.setLineSpacing(0f, lineSpacing);
+        setupSystemBarInsets();
         updateUi();
     }
 
@@ -187,6 +191,45 @@ public class MainActivity extends Activity {
         });
 
         setContentView(root);
+    }
+
+    private void setupSystemBarInsets() {
+        final View content = findViewById(android.R.id.content);
+        if (content == null) return;
+        content.setOnApplyWindowInsetsListener((v, insets) -> {
+            int top = 0, bottom = 0;
+            if (!systemBarsHidden && Build.VERSION.SDK_INT >= 30) {
+                android.graphics.Insets bars = insets.getInsets(android.view.WindowInsets.Type.systemBars());
+                top = bars.top;
+                bottom = bars.bottom;
+            }
+            v.setPadding(baseLeft, baseTop + top, baseRight, baseBottom + bottom);
+            return insets;
+        });
+        content.requestApplyInsets();
+    }
+
+    private void setSystemBarsHidden(boolean hide) {
+        systemBarsHidden = hide;
+        if (Build.VERSION.SDK_INT >= 30) {
+            WindowInsetsController controller = getWindow().getInsetsController();
+            if (controller != null) {
+                controller.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                if (hide) controller.hide(android.view.WindowInsets.Type.systemBars());
+                else controller.show(android.view.WindowInsets.Type.systemBars());
+            }
+        } else {
+            int flags = View.SYSTEM_UI_FLAG_LAYOUT_STABLE;
+            if (hide) {
+                flags |= View.SYSTEM_UI_FLAG_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION;
+            }
+            getWindow().getDecorView().setSystemUiVisibility(flags);
+        }
+        setupSystemBarInsets();
     }
 
     private LinearLayout makeRow() {
@@ -374,7 +417,9 @@ public class MainActivity extends Activity {
 
     private void showControls() {
         handler.removeCallbacks(hideControlsRunnable);
+        if (fileView != null) fileView.setVisibility(View.VISIBLE);
         if (controlPanel != null) controlPanel.setVisibility(View.VISIBLE);
+        setSystemBarsHidden(false);
     }
 
     private void scheduleHideControls() {
